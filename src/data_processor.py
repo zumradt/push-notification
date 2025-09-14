@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
-import re
 from datetime import datetime
-import json
 
 class DataProcessor:
     def __init__(self):
@@ -59,76 +57,20 @@ class DataProcessor:
             'gold_sell_in': 'gold'
         }
     
-    def load_all_data(self, data_folder):
-        """Загрузка всех данных из папки"""
-        all_files = os.listdir(data_folder)
-        
-        # Загрузка клиентов
-        clients_file = [f for f in all_files if f.lower() == 'clients.csv']
-        if not clients_file:
-            raise FileNotFoundError("Файл clients.csv не найден")
-        
-        clients = pd.read_csv(os.path.join(data_folder, clients_file[0]))
-        
-        # Загрузка транзакций и переводов
-        transactions_dfs = []
-        transfers_dfs = []
-        
-        for file in all_files:
-            if file.lower() == 'clients.csv':
-                continue
-                
-            file_path = os.path.join(data_folder, file)
-            
-            # Определяем тип файла по названию
-            if 'transaction' in file.lower():
-                df = pd.read_csv(file_path)
-                df['file_type'] = 'transaction'
-                transactions_dfs.append(df)
-            elif 'transfer' in file.lower():
-                df = pd.read_csv(file_path)
-                df['file_type'] = 'transfer'
-                transfers_dfs.append(df)
-        
-        # Объединение всех транзакций и переводов
-        transactions = pd.concat(transactions_dfs, ignore_index=True) if transactions_dfs else pd.DataFrame()
-        transfers = pd.concat(transfers_dfs, ignore_index=True) if transfers_dfs else pd.DataFrame()
-        
-        return clients, transactions, transfers
-    
-    def extract_client_id_from_filename(self, filename):
-        """Извлечение client_code из имени файла"""
-        # Ищем числа в имени файла
-        numbers = re.findall(r'\d+', filename)
-        return int(numbers[0]) if numbers else None
-    
     def preprocess_data(self, clients, transactions, transfers):
         """Предобработка данных"""
+        features = clients.copy()
+        
         # Обработка транзакций
         if not transactions.empty:
-            transactions['date'] = pd.to_datetime(transactions['date'])
+            print("Обработка транзакций...")
+            transactions['date'] = pd.to_datetime(transactions['date'], errors='coerce')
+            transactions = transactions.dropna(subset=['date'])
             transactions['month'] = transactions['date'].dt.month
             transactions['category_en'] = transactions['category'].map(self.category_mapping)
             transactions['category_en'] = transactions['category_en'].fillna('other')
-        
-        # Обработка переводов
-        if not transfers.empty:
-            transfers['date'] = pd.to_datetime(transfers['date'])
-            transfers['month'] = transfers['date'].dt.month
-            transfers['type_category'] = transfers['type'].map(self.transfer_mapping)
-            transfers['type_category'] = transfers['type_category'].fillna('other')
-        
-        # Агрегация данных по клиентам
-        client_features = self._aggregate_client_features(clients, transactions, transfers)
-        
-        return client_features
-    
-    def _aggregate_client_features(self, clients, transactions, transfers):
-        """Агрегация признаков по клиентам"""
-        features = clients.copy()
-        
-        # Статистика по транзакциям
-        if not transactions.empty:
+            
+            # Статистика по транзакциям
             transaction_stats = transactions.groupby('client_code').agg({
                 'amount': ['sum', 'mean', 'count'],
                 'category': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'Unknown'
@@ -149,8 +91,16 @@ class DataProcessor:
             features = features.merge(transaction_stats, on='client_code', how='left')
             features = features.merge(category_spending, on='client_code', how='left')
         
-        # Статистика по переводам
+        # Обработка переводов
         if not transfers.empty:
+            print("Обработка переводов...")
+            transfers['date'] = pd.to_datetime(transfers['date'], errors='coerce')
+            transfers = transfers.dropna(subset=['date'])
+            transfers['month'] = transfers['date'].dt.month
+            transfers['type_category'] = transfers['type'].map(self.transfer_mapping)
+            transfers['type_category'] = transfers['type_category'].fillna('other')
+            
+            # Статистика по переводам
             transfer_stats = transfers.groupby('client_code').agg({
                 'amount': ['sum', 'mean'],
                 'direction': lambda x: (x == 'in').sum() / len(x) if len(x) > 0 else 0
@@ -177,4 +127,5 @@ class DataProcessor:
         categorical_cols = features.select_dtypes(include=['object']).columns
         features[categorical_cols] = features[categorical_cols].fillna('Unknown')
         
+        print("Обработка данных завершена")
         return features

@@ -4,7 +4,7 @@ import json
 
 class ProductRecommender:
     def __init__(self, config_path):
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config = json.load(f)
         
         self.products = self.config['products']
