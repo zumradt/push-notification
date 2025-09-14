@@ -1,0 +1,16 @@
+{
+  "products": {
+    "Карта для путешествий": {
+      "signals": ["Путешествия", "Такси", "Отели", "Авиабилеты"],
+      "benefit_calc": "lambda df: df['amount'].sum() * 0.04",
+      "min_threshold": 50000,
+      "template": "{name}, в {month} у вас много поездок/такси. С тревел-картой часть расходов вернулась бы кешбэком. Хотите оформить?"
+    },
+    "Премиальная карта": {
+      "signals": ["avg_balance", "restaurant_spending", "jewelry_spending"],
+      "benefit_calc": "lambda df, client: min(client['avg_monthly_balance_KZT'] * 0.04, 100000)",
+      "min_balance": 1000000,
+      "template": "{name}, у вас стабильно крупный остаток и траты в ресторанах. Премиальная карта даст повышенный кешбэк и бесплатные снятия. Оформить сейчас."
+    }
+  }
+}
